@@ -1,0 +1,124 @@
+#Inserción más cercana
+import pandas as pd
+import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
+import time
+from tqdm import tqdm  # Biblioteca para la barra de progreso
+
+# Leer los datos del archivo
+datos = pd.read_csv("C:/Users/csaavedra/OneDrive - FIBRA STORAGE/Documents/Programación lineal/IDO/Proyecto/Uruguay.csv",header = None, names = ["Ciudad", "X", "Y"])
+datos = datos.head(4)
+# Crear un grafo dirigido
+G = nx.DiGraph()
+
+# Añadir nodos (ciudades)
+for _, row in datos.iterrows():
+    G.add_node(row["Ciudad"], pos=(row["X"], row["Y"]))
+
+# Calcular distancias euclidianas y añadir aristas (distancias)
+for i, ciudad1 in datos.iterrows():
+    for j, ciudad2 in datos.iterrows():
+        if i != j:  # Evitar bucles (una ciudad consigo misma)
+            distancia = np.sqrt((ciudad1["X"] - ciudad2["X"])**2 + (ciudad1["Y"] - ciudad2["Y"])**2)
+            G.add_edge(ciudad1["Ciudad"], ciudad2["Ciudad"], weight=distancia)
+
+# Obtener posiciones de los nodos
+pos = nx.get_node_attributes(G, 'pos')
+
+# Implementación de la heurística de inserción más cercana para el TSP
+def nearest_insertion_tsp(G):
+    # Seleccionar un nodo inicial arbitrario
+    nodo_inicial = list(G.nodes)[0]
+    
+    # Inicializar el tour con el nodo inicial
+    tour = [nodo_inicial]
+    
+    # Nodos no visitados
+    nodos_no_visitados = set(G.nodes) - set(tour)
+    
+    # Añadir el nodo más cercano al inicial para empezar
+    nodo_mas_cercano = min(nodos_no_visitados, key=lambda nodo: G[nodo_inicial][nodo]['weight'])
+    tour.append(nodo_mas_cercano)
+    nodos_no_visitados.remove(nodo_mas_cercano)
+    
+    # Configurar la barra de progreso
+    progreso = tqdm(total=len(G.nodes) - 2, desc="Construyendo tour", unit="ciudad")
+
+    # Repetir hasta que todos los nodos estén en el tour
+    while nodos_no_visitados:
+        # Encontrar el nodo más cercano al tour actual
+        nodo_cercano, insertar_en = None, None
+        menor_distancia = float('inf')
+        
+        for i in range(len(tour)):
+            ciudad_a = tour[i]
+            ciudad_b = tour[(i + 1) % len(tour)]  # Siguiente en el tour (o el primero si es el último)
+            
+            for nodo in nodos_no_visitados:
+                distancia_a = G[ciudad_a][nodo]['weight']
+                distancia_b = G[ciudad_b][nodo]['weight']
+                distancia_total = distancia_a + distancia_b
+                
+                if distancia_total < menor_distancia:
+                    menor_distancia = distancia_total
+                    nodo_cercano = nodo
+                    insertar_en = i
+        
+        # Insertar el nodo más cercano en el lugar óptimo del tour
+        tour.insert(insertar_en + 1, nodo_cercano)
+        nodos_no_visitados.remove(nodo_cercano)
+        progreso.update(1)  # Actualizar la barra de progreso
+
+    progreso.close()  # Cerrar la barra de progreso
+    # Conectar el último nodo con el primero para completar el ciclo
+    tour.append(tour[0])
+    return tour
+
+
+
+# Medir el tiempo de ejecución
+inicio = time.time()
+
+# Calcular el tour usando la heurística de inserción más cercana
+tour = nearest_insertion_tsp(G)
+
+fin = time.time()
+tiempo_ejecucion = fin - inicio
+
+tour_df = pd.DataFrame({"Orden": range(1, len(tour) + 1), "Ciudad": tour})
+
+# Mostrar el tiempo de ejecución
+print(f"Tiempo de ejecución: {tiempo_ejecucion:.4f} segundos")
+
+def calcular_distancia_total(G, tour):
+    distancia_total = 0
+    for i in range(len(tour) - 1):
+        ciudad_origen = tour[i]
+        ciudad_destino = tour[i + 1]
+        distancia_total += G[ciudad_origen][ciudad_destino]['weight']
+    return distancia_total
+
+# Calcular la distancia total del tour
+distancia_total = calcular_distancia_total(G, tour)
+
+print("Lista de ciudades en el orden del tour:")
+for i, ciudad in enumerate(tour):
+    print(f"{i + 1}: {ciudad}")
+
+print(f"\nDistancia total recorrida: {distancia_total:.2f}")
+
+
+"""
+# Visualizar el tour
+plt.figure(figsize=(10, 8))
+nx.draw(G, pos, with_labels=True, node_color='lightblue', node_size=500, font_size=10, font_color='darkblue')
+
+# Dibujar el tour
+tour_edges = [(tour[i], tour[i+1]) for i in range(len(tour) - 1)]
+nx.draw_networkx_edges(G, pos, edgelist=tour_edges, edge_color='red', width=2)
+
+# Mostrar el gráfico
+plt.title("Heurística de inserción más cercana para el TSP")
+plt.show()
+"""
